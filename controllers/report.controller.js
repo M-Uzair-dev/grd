@@ -4,8 +4,8 @@ const Customer = require('../models/customer.model');
 const Partner = require('../models/partner.model');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const cloudinary = require('../utils/cloudinary');
+const { Readable } = require('stream');
 
 // Configure nodemailer
 const transporter = nodemailer.createTransport({
@@ -16,23 +16,8 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Configure multer for file upload
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/reports';
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   fileFilter: function (req, file, cb) {
@@ -46,6 +31,32 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 }).single('pdfFile');
+
+// Helper function to upload to Cloudinary
+const uploadToCloudinary = async (buffer) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'raw',
+        folder: 'reports',
+        format: 'pdf'
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+
+    const readableStream = new Readable({
+      read() {
+        this.push(buffer);
+        this.push(null);
+      }
+    });
+
+    readableStream.pipe(uploadStream);
+  });
+};
 
 // Get all reports
 exports.getAllReports = async (req, res) => {
@@ -104,6 +115,7 @@ exports.createReport = async (req, res) => {
         return res.status(400).json({ message: err.message });
       }
 
+      try {
       const { 
         reportNumber, 
         vnNumber, 
@@ -116,12 +128,11 @@ exports.createReport = async (req, res) => {
 
       // Basic validation
       if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.file) {
-        // Delete uploaded file if other validation fails
-        if (req.file) {
-          fs.unlinkSync(req.file.path);
+          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and PDF File are required)' });
         }
-        return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and PDF File are required)' });
-      }
+
+        // Upload file to Cloudinary
+        const result = await uploadToCloudinary(req.file.buffer);
 
       // Ensure report number has WO prefix
       const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
@@ -130,7 +141,7 @@ exports.createReport = async (req, res) => {
       const report = await Report.create({
         reportNumber: formattedReportNumber,
         vnNumber,
-        pdfFile: req.file.path, // Save the file path
+          pdfFile: result.secure_url, // Store Cloudinary URL
         adminNote,
         partnerId,
         customerId,
@@ -167,6 +178,10 @@ exports.createReport = async (req, res) => {
           { path: 'unitId', select: 'unitName' }
         ])
       });
+      } catch (error) {
+        console.error('Report creation error:', error);
+        res.status(500).json({ message: error.message });
+      }
     });
   } catch (error) {
     console.error('Report creation error:', error);
@@ -180,7 +195,6 @@ exports.updateReport = async (req, res) => {
     const { 
       reportNumber, 
       vnNumber, 
-      pdfFile, 
       adminNote, 
       status 
     } = req.body;
@@ -202,7 +216,6 @@ exports.updateReport = async (req, res) => {
 
     report.reportNumber = reportNumber || report.reportNumber;
     report.vnNumber = vnNumber || report.vnNumber;
-    report.pdfFile = pdfFile || report.pdfFile;
     report.adminNote = adminNote || report.adminNote;
     report.status = status || report.status;
 
@@ -319,9 +332,14 @@ exports.deleteReport = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    // Delete PDF file if it exists
-    if (report.pdfFile && fs.existsSync(report.pdfFile)) {
-      fs.unlinkSync(report.pdfFile);
+    // Delete file from Cloudinary if URL exists
+    if (report.pdfFile) {
+      const publicId = report.pdfFile.split('/').pop().split('.')[0];
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+      } catch (error) {
+        console.error('Error deleting file from Cloudinary:', error);
+      }
     }
 
     await Report.findByIdAndDelete(req.params.id);
@@ -348,26 +366,37 @@ exports.updatePdf = async (req, res) => {
         return res.status(400).json({ message: 'No PDF file provided' });
       }
 
+      try {
       const report = await Report.findById(req.params.id);
       if (!report) {
-        // Delete uploaded file if report not found
-        fs.unlinkSync(req.file.path);
         return res.status(404).json({ message: 'Report not found' });
       }
 
-      // Delete old PDF file if it exists
-      if (report.pdfFile && fs.existsSync(report.pdfFile)) {
-        fs.unlinkSync(report.pdfFile);
-      }
+        // Delete old file from Cloudinary if it exists
+        if (report.pdfFile) {
+          const publicId = report.pdfFile.split('/').pop().split('.')[0];
+          try {
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+          } catch (error) {
+            console.error('Error deleting old file from Cloudinary:', error);
+          }
+        }
 
-      // Update report with new PDF file path
-      report.pdfFile = req.file.path;
+        // Upload new file to Cloudinary
+        const result = await uploadToCloudinary(req.file.buffer);
+
+        // Update report with new PDF file URL
+        report.pdfFile = result.secure_url;
       await report.save();
 
       res.json({
         message: 'PDF file updated successfully',
         pdfFile: report.pdfFile
       });
+      } catch (error) {
+        console.error('Error updating PDF:', error);
+        res.status(500).json({ message: error.message });
+      }
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

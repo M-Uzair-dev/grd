@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { 
-  adminSignup, 
   adminLogin, 
   partnerLogin, 
   forgotPassword, 
@@ -10,7 +9,6 @@ const {
 const { protect } = require('../middleware/auth.middleware');
 
 // Auth routes
-router.post('/admin/signup', adminSignup);
 router.post('/admin/login', adminLogin);
 router.post('/partner/login', partnerLogin);
 router.post('/forgot-password', forgotPassword);
