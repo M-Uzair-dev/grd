@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const { protect, adminOnly, partnerOnly } = require('../middleware/auth.middleware');
 const {
   getAllPartners,
   getAllPartnersNested,
@@ -9,11 +9,18 @@ const {
   createPartner,
   updatePartner,
   updatePartnerPassword,
-  deletePartner
+  deletePartner,
+  getPartnerNested
 } = require('../controllers/partner.controller');
 
-// All routes are protected and admin-only
-router.use(protect, adminOnly);
+// All routes are protected
+router.use(protect);
+
+// Partner routes
+router.get('/nested/me', partnerOnly, getPartnerNested);
+
+// Admin-only routes
+router.use(adminOnly);
 
 router.route('/')
   .get(getAllPartners)

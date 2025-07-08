@@ -69,18 +69,30 @@ exports.getPartnerCustomers = async (req, res) => {
 // Get a single customer by ID
 exports.getCustomerById = async (req, res) => {
   try {
-    console.log(req.params)
     const customer = await Customer.findById(req.params.id)
-      .populate('partnerId', 'name email')
-      .select('name email partnerId createdAt updatedAt'); // Include partner details
-      console.log(customer)
+      .populate('partnerId', 'name email adminId')
+      .select('name email partnerId createdAt updatedAt');
+
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
-    console.log(customer)
+
+    // Check authorization
+    if (req.role === 'partner') {
+      // Partners can only access their own customers
+      if (customer.partnerId._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to access this customer' });
+      }
+    } else if (req.role === 'admin') {
+      // Admins can only access customers of their partners
+      if (customer.partnerId.adminId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to access this customer' });
+      }
+    }
+
     res.json(customer);
   } catch (error) {
-    console.log(error)
+    console.error('Error in getCustomerById:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -118,7 +130,7 @@ exports.createCustomer = async (req, res) => {
 // Update customer
 exports.updateCustomer = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, partnerId } = req.body;
     const customer = await Customer.findById(req.params.id)
       .populate('partnerId');
 
@@ -131,6 +143,21 @@ exports.updateCustomer = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
+    // If partnerId is being changed, verify the new partner
+    if (partnerId && partnerId !== customer.partnerId._id.toString()) {
+      const newPartner = await Partner.findById(partnerId);
+      if (!newPartner) {
+        return res.status(404).json({ message: 'New partner not found' });
+      }
+
+      // Check if the new partner belongs to the admin
+      if (newPartner.adminId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to assign customer to this partner' });
+      }
+
+      customer.partnerId = partnerId;
+    }
+
     customer.name = name || customer.name;
     customer.email = email || customer.email;
 
@@ -141,6 +168,7 @@ exports.updateCustomer = async (req, res) => {
       customer: await customer.populate('partnerId', 'name email')
     });
   } catch (error) {
+    console.error('Error updating customer:', error);
     res.status(500).json({ message: error.message });
   }
 };

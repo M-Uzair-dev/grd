@@ -10,7 +10,9 @@ const {
   updatePartnerNote,
   sendReportToCustomer,
   deleteReport,
-  updatePdf
+  updatePdf,
+  downloadReport,
+  markAsRead
 } = require('../controllers/report.controller');
 
 // All routes are protected
@@ -21,19 +23,23 @@ router.route('/')
   .get(adminOnly, getAllReports)
   .post(adminOnly, createReport);
 
-// Get single report
-router.get('/:id', adminOnly, getReportById);
+// Partner routes - these need to be before /:id routes
+router.get('/partner', partnerOnly, getPartnerReports);
+router.put('/:id/partner-note', partnerOnly, updatePartnerNote);
+router.post('/:id/send', partnerOnly, sendReportToCustomer);
+router.post('/:id/mark-read', partnerOnly, markAsRead);
 
-router.route('/:id')
-  .put(adminOnly, updateReport)
-  .delete(adminOnly, deleteReport);
+// Get single report
+router.get('/:id', protect, getReportById);
+
+// Download report
+router.get('/:id/download', protect, downloadReport);
 
 // Update PDF file
 router.put('/:id/pdf', adminOnly, updatePdf);
 
-// Partner routes
-router.get('/partner', partnerOnly, getPartnerReports);
-router.put('/:id/partner-note', partnerOnly, updatePartnerNote);
-router.post('/:id/send', partnerOnly, sendReportToCustomer);
+router.route('/:id')
+  .put(adminOnly, updateReport)
+  .delete(adminOnly, deleteReport);
 
 module.exports = router;

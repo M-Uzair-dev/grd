@@ -15,10 +15,10 @@ router.use(protect);
 
 // Routes that both admin and partner can access
 router.get('/customer/:customerId', getCustomerUnits);
+router.get('/:id', getUnitById);
 
 // Admin-only routes
 router.get('/', adminOnly, getAllUnits);
-router.get('/:id', adminOnly, getUnitById);
 router.post('/', adminOnly, createUnit);
 router.put('/:id', adminOnly, updateUnit);
 router.delete('/:id', adminOnly, deleteUnit);

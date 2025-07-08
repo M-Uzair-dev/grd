@@ -34,6 +34,10 @@ const reportSchema = new mongoose.Schema({
     enum: ['Active', 'Rejected', 'Completed'],
     default: 'Active'
   },
+  isNew: {
+    type: Boolean,
+    default: true
+  },
   partnerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Partner',

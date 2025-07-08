@@ -83,7 +83,7 @@ exports.createUnit = async (req, res) => {
 // Update unit
 exports.updateUnit = async (req, res) => {
   try {
-    const { unitName } = req.body;
+    const { unitName, customerId } = req.body;
     const unit = await Unit.findById(req.params.id)
       .populate({
         path: 'customerId',
@@ -101,6 +101,21 @@ exports.updateUnit = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
+    // If customerId is being changed, verify the new customer
+    if (customerId && customerId !== unit.customerId._id.toString()) {
+      const newCustomer = await Customer.findById(customerId).populate('partnerId');
+      if (!newCustomer) {
+        return res.status(404).json({ message: 'New customer not found' });
+      }
+      
+      // Check if the new customer belongs to a partner managed by the admin
+      if (newCustomer.partnerId.adminId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to assign unit to this customer' });
+      }
+      
+      unit.customerId = customerId;
+    }
+
     unit.unitName = unitName || unit.unitName;
     await unit.save();
 
@@ -109,6 +124,7 @@ exports.updateUnit = async (req, res) => {
       unit: await unit.populate('customerId', 'name email')
     });
   } catch (error) {
+    console.error('Error updating unit:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -149,11 +165,31 @@ exports.deleteUnit = async (req, res) => {
 exports.getUnitById = async (req, res) => {
   try {
     const unit = await Unit.findById(req.params.id)
-      .populate('customerId', 'name email')
+      .populate({
+        path: 'customerId',
+        select: 'name email partnerId',
+        populate: {
+          path: 'partnerId',
+          select: 'name email adminId'
+        }
+      })
       .lean();
 
     if (!unit) {
       return res.status(404).json({ message: 'Unit not found' });
+    }
+
+    // Check authorization
+    if (req.role === 'partner') {
+      // Partners can only access their own customers' units
+      if (unit.customerId.partnerId._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to access this unit' });
+      }
+    } else if (req.role === 'admin') {
+      // Admins can only access units of customers under their partners
+      if (unit.customerId.partnerId.adminId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to access this unit' });
+      }
     }
 
     // Get all reports for this unit

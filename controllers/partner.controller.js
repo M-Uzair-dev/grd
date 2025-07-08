@@ -16,6 +16,59 @@ exports.getAllPartners = async (req, res) => {
   }
 };
 
+// Get partner's nested data (for partner dashboard)
+exports.getPartnerNested = async (req, res) => {
+  try {
+    const partner = await Partner.findById(req.user._id)
+      .select('name _id')
+      .lean();
+
+    if (!partner) {
+      return res.status(404).json({ message: 'Partner not found' });
+    }
+
+    // Get all customers for this partner
+    const customers = await Customer.find({ partnerId: partner._id })
+      .select('name _id')
+      .lean();
+
+    // For each customer, get their units and direct reports
+    for (let customer of customers) {
+      const units = await Unit.find({ customerId: customer._id })
+        .select('unitName _id')
+        .lean();
+
+      // For each unit, get its reports
+      for (let unit of units) {
+        const unitReports = await Report.find({ unitId: unit._id })
+          .select('reportNumber vnNumber status isNew _id')
+          .lean();
+        unit.reports = unitReports;
+      }
+
+      // Get reports directly linked to customer (no unit)
+      const customerReports = await Report.find({ 
+        customerId: customer._id,
+        $or: [
+          { unitId: null },
+          { unitId: { $exists: false } }
+        ]
+      })
+        .select('reportNumber vnNumber status isNew _id')
+        .lean();
+
+      customer.units = units;
+      customer.reports = customerReports;
+    }
+
+    partner.customers = customers;
+    res.json([partner]); // Return as array to match admin format
+  } catch (error) {
+    console.error('Error fetching partner nested data:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Get all partners with nested data (names only)
 exports.getAllPartnersNested = async (req, res) => {
   try {
@@ -38,7 +91,7 @@ exports.getAllPartnersNested = async (req, res) => {
         // For each unit, get its reports
         for (let unit of units) {
           const unitReports = await Report.find({ unitId: unit._id })
-            .select('reportNumber vnNumber _id')
+            .select('reportNumber vnNumber isNew _id')
             .lean();
           unit.reports = unitReports;
         }
@@ -51,7 +104,7 @@ exports.getAllPartnersNested = async (req, res) => {
             { unitId: { $exists: false } }
           ]
         })
-          .select('reportNumber vnNumber _id')
+          .select('reportNumber vnNumber isNew _id')
           .lean();
 
         customer.units = units;

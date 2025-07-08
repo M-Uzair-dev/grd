@@ -11,19 +11,22 @@ const {
   deleteCustomer
 } = require('../controllers/customer.controller');
 
-// All routes are protected and admin-only
-router.use(protect, adminOnly);
+// All routes are protected
+router.use(protect);
 
+// Admin-only routes
 router.route('/')
-  .get(getAllCustomers)
-  .post(createCustomer);
+  .get(adminOnly, getAllCustomers)
+  .post(adminOnly, createCustomer);
 
-router.get('/nested', getAllCustomersNested);
+router.get('/nested', adminOnly, getAllCustomersNested);
+
+// Routes accessible by both admin and partner
 router.get('/partner/:partnerId', getPartnerCustomers);
 
 router.route('/:id')
   .get(getCustomerById)
-  .put(updateCustomer)
-  .delete(deleteCustomer);
+  .put(adminOnly, updateCustomer)
+  .delete(adminOnly, deleteCustomer);
 
 module.exports = router; 
