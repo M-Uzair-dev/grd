@@ -4,7 +4,8 @@ const {
   adminLogin, 
   partnerLogin, 
   forgotPassword, 
-  resetPassword 
+  resetPassword,
+  changePassword 
 } = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth.middleware');
 
@@ -13,6 +14,7 @@ router.post('/admin/login', adminLogin);
 router.post('/partner/login', partnerLogin);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:role/:token', resetPassword);
+router.post('/change-password', protect, changePassword);
 
 // Protected route example
 router.get('/me', protect, (req, res) => {
