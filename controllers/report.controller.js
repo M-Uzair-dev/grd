@@ -52,7 +52,7 @@ const upload = multer({
 }).single('pdfFile');
 
 // Get all reports
-exports.getAllReports = async (req, res) => {
+const getAllReports = async (req, res) => {
   try {
     const reports = await Report.find()
       .populate('partnerId', 'name email')
@@ -66,7 +66,7 @@ exports.getAllReports = async (req, res) => {
 };
 
 // Get reports for specific partner
-exports.getPartnerReports = async (req, res) => {
+const getPartnerReports = async (req, res) => {
   try {
     const reports = await Report.find({ partnerId: req.user._id })
       .populate('partnerId', 'name email')
@@ -80,7 +80,7 @@ exports.getPartnerReports = async (req, res) => {
 };
 
 // Get a single report by ID
-exports.getReportById = async (req, res) => {
+const getReportById = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id)
       .populate('partnerId', 'name email')
@@ -98,7 +98,7 @@ exports.getReportById = async (req, res) => {
 };
 
 // Create new report
-exports.createReport = async (req, res) => {
+const createReport = async (req, res) => {
   try {
     // Handle file upload
     upload(req, res, async function (err) {
@@ -109,66 +109,76 @@ exports.createReport = async (req, res) => {
       }
 
       try {
-      const { 
-        reportNumber, 
-        vnNumber, 
-        adminNote, 
-        partnerId, 
-        customerId, 
-        unitId,
-        status 
-      } = req.body;
+        const { 
+          reportNumber, 
+          vnNumber, 
+          adminNote, 
+          partnerId, 
+          customerId, 
+          unitId,
+          status,
+          sendEmail
+        } = req.body;
 
-      // Basic validation
-      if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.file) {
+        // Basic validation
+        if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.file) {
           return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and PDF File are required)' });
         }
 
-      // Ensure report number has WO prefix
-      const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
+        // Ensure report number has WO prefix
+        const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
 
         // Create the report with the file path
-      const report = await Report.create({
-        reportNumber: formattedReportNumber,
-        vnNumber,
-        pdfFile: `/uploads/reports/${req.file.filename}`, // Store the relative path
-        adminNote,
-        partnerId,
-        customerId,
-        unitId,
-        status,
-        isNew: true
-      });
+        const report = await Report.create({
+          reportNumber: formattedReportNumber,
+          vnNumber,
+          pdfFile: `/uploads/reports/${req.file.filename}`, // Store the relative path
+          adminNote,
+          partnerId,
+          customerId,
+          unitId,
+          status,
+          isNew: true
+        });
 
-      // Get partner email for notification
-      const partner = await Partner.findById(partnerId);
-      if (partner && partner.email) {
-        // Send email to partner
-        const mailOptions = {
-          from: process.env.EMAIL_FROM,
-          to: partner.email,
-          subject: 'New Report Available',
-          html: `
-            <h1>New Report Available</h1>
-            <p>A new report has been created:</p>
-            <p>Report Number: ${reportNumber}</p>
-            <p>VN Number: ${vnNumber}</p>
-            <p>Status: ${status}</p>
-            <p>Admin Note: ${adminNote || 'No note provided'}</p>
-          `
-        };
+        // Only send email if sendEmail is true
+        if (sendEmail === 'true') {
+          // Get partner email for notification
+          const partner = await Partner.findById(partnerId);
+          if (partner && partner.email) {
+            // Send email to partner
+            const mailOptions = {
+              from: process.env.EMAIL_FROM,
+              to: partner.email,
+              subject: `New Report Available - ${formattedReportNumber}`,
+              html: `
+                <h2>New Report Available</h2>
+                <p>Hello ${partner.name},</p>
+                <p>A new report has been generated with the following details:</p>
+                <ul>
+                  <li>Report Number: ${formattedReportNumber}</li>
+                  <li>VN Number: ${vnNumber}</li>
+                  <li>Status: ${status}</li>
+                  <li>Customer: ${(await Customer.findById(customerId)).name}</li>
+                  ${unitId ? `<li>Unit: ${(await Unit.findById(unitId)).unitName}</li>` : ''}
+                  ${adminNote ? `<li>Admin Note: ${adminNote}</li>` : ''}
+                </ul>
+                <p>Please log in to your dashboard to view the full report.</p>
+              `
+            };
 
-        await transporter.sendMail(mailOptions);
-      }
+            await transporter.sendMail(mailOptions);
+          }
+        }
 
-      res.status(201).json({
-        message: 'Report created successfully',
-        report: await report.populate([
-          { path: 'partnerId', select: 'name email' },
-          { path: 'customerId', select: 'name email' },
-          { path: 'unitId', select: 'unitName' }
-        ])
-      });
+        res.status(201).json({
+          message: 'Report created successfully',
+          report: await report.populate([
+            { path: 'partnerId', select: 'name email' },
+            { path: 'customerId', select: 'name email' },
+            { path: 'unitId', select: 'unitName' }
+          ])
+        });
       } catch (error) {
         // If there's an error and a file was uploaded, delete it
         if (req.file) {
@@ -188,7 +198,7 @@ exports.createReport = async (req, res) => {
 };
 
 // Update report
-exports.updateReport = async (req, res) => {
+const updateReport = async (req, res) => {
   try {
     const { 
       reportNumber, 
@@ -272,7 +282,7 @@ exports.updateReport = async (req, res) => {
 };
 
 // Update partner note
-exports.updatePartnerNote = async (req, res) => {
+const updatePartnerNote = async (req, res) => {
   try {
     const { partnerNote } = req.body;
     const report = await Report.findById(req.params.id);
@@ -303,7 +313,7 @@ exports.updatePartnerNote = async (req, res) => {
 };
 
 // Mark report as read
-exports.markAsRead = async (req, res) => {
+const markAsRead = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
 
@@ -334,7 +344,7 @@ exports.markAsRead = async (req, res) => {
 };
 
 // Send report to customer
-exports.sendReportToCustomer = async (req, res) => {
+const sendReportToCustomer = async (req, res) => {
   try {
     console.log('Starting sendReportToCustomer process:', {
       reportId: req.params.id
@@ -401,19 +411,21 @@ exports.sendReportToCustomer = async (req, res) => {
       to: customerEmail,
       subject: `Report ${report.reportNumber} Available`,
       html: `
-        <h1>Report Details</h1>
+        <h2>Report Details</h2>
         <p>Dear ${customerName},</p>
-        <p>A new report is available for your review:</p>
-        <p>Report Number: ${report.reportNumber}</p>
-        <p>VN Number: ${report.vnNumber}</p>
-        <p>Status: ${report.status}</p>
-        <p>Partner: ${report.partnerId.name}</p>
-        <p>Partner Email: ${report.partnerId.email}</p>
-        ${report.unitId ? `<p>Unit: ${report.unitId.unitName}</p>` : ''}
-        ${report.adminNote ? `<p>Admin Note: ${report.adminNote}</p>` : ''}
-        ${report.partnerNote ? `<p>Partner Note: ${report.partnerNote}</p>` : ''}
-        <br>
-        <p>The report is attached to this email.</p>
+        <p>A new report is available for your review with the following details:</p>
+        <ul>
+          <li>Report Number: ${report.reportNumber}</li>
+          <li>VN Number: ${report.vnNumber}</li>
+          <li>Status: ${report.status}</li>
+          <li>Partner: ${report.partnerId.name}</li>
+          <li>Partner Email: ${report.partnerId.email}</li>
+          ${report.unitId ? `<li>Unit: ${report.unitId.unitName}</li>` : ''}
+          ${report.adminNote ? `<li>Admin Note: ${report.adminNote}</li>` : ''}
+          ${report.partnerNote ? `<li>Partner Note: ${report.partnerNote}</li>` : ''}
+        </ul>
+        <p>The report is attached to this email for your reference.</p>
+        <p>If you have any questions, please don't hesitate to contact your partner using the email address provided above.</p>
       `,
       attachments: [{
         filename: `report_${report.reportNumber}.pdf`,
@@ -447,7 +459,7 @@ exports.sendReportToCustomer = async (req, res) => {
 };
 
 // Delete report
-exports.deleteReport = async (req, res) => {
+const deleteReport = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id)
       .populate({
@@ -482,7 +494,7 @@ exports.deleteReport = async (req, res) => {
 };
 
 // Update PDF file
-exports.updatePdf = async (req, res) => {
+const updatePdf = async (req, res) => {
   try {
     // Handle file upload
     upload(req, res, async function (err) {
@@ -497,14 +509,14 @@ exports.updatePdf = async (req, res) => {
       }
 
       try {
-      const report = await Report.findById(req.params.id);
-      if (!report) {
+        const report = await Report.findById(req.params.id);
+        if (!report) {
           // Delete the newly uploaded file
           if (fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
           }
-        return res.status(404).json({ message: 'Report not found' });
-      }
+          return res.status(404).json({ message: 'Report not found' });
+        }
 
         // Delete old PDF file if it exists
         if (report.pdfFile) {
@@ -516,12 +528,12 @@ exports.updatePdf = async (req, res) => {
 
         // Update report with new PDF file path
         report.pdfFile = `/uploads/reports/${req.file.filename}`;
-      await report.save();
+        await report.save();
 
-      res.json({
-        message: 'PDF file updated successfully',
-        pdfFile: report.pdfFile
-      });
+        res.json({
+          message: 'PDF file updated successfully',
+          pdfFile: report.pdfFile
+        });
       } catch (error) {
         // Clean up the new file if there was an error
         if (req.file && fs.existsSync(req.file.path)) {
@@ -537,7 +549,7 @@ exports.updatePdf = async (req, res) => {
 };
 
 // Download report
-exports.downloadReport = async (req, res) => {
+const downloadReport = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
     if (!report) {
@@ -569,5 +581,79 @@ exports.downloadReport = async (req, res) => {
     console.error('Download error:', error);
     res.status(500).json({ message: 'Failed to download report' });
   }
+};
+
+// Send report to partner
+const sendToPartner = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id)
+      .populate('partnerId')
+      .populate('customerId')
+      .populate('unitId');
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (!report.partnerId) {
+      return res.status(400).json({ message: 'Report has no associated partner' });
+    }
+
+    if (!report.pdfFile) {
+      return res.status(400).json({ message: 'Report has no PDF file attached' });
+    }
+
+    const pdfPath = path.join(__dirname, '..', report.pdfFile);
+    if (!fs.existsSync(pdfPath)) {
+      throw new Error('Report PDF file not found');
+    }
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: report.partnerId.email,
+      subject: `New Report Available - ${report.reportNumber}`,
+      html: `
+        <h2>New Report Available</h2>
+        <p>Hello ${report.partnerId.name},</p>
+        <p>A new report has been generated with the following details:</p>
+        <ul>
+          <li>Report Number: ${report.reportNumber}</li>
+          <li>VN Number: ${report.vnNumber}</li>
+          <li>Status: ${report.status}</li>
+          <li>Customer: ${report.customerId ? report.customerId.name : 'N/A'}</li>
+          ${report.unitId ? `<li>Unit: ${report.unitId.unitName}</li>` : ''}
+          ${report.adminNote ? `<li>Admin Note: ${report.adminNote}</li>` : ''}
+        </ul>
+        <p>The report is attached to this email for your reference.</p>
+        <p>You can also view this report and manage your reports by logging into your dashboard.</p>
+      `,
+      attachments: [{
+        filename: `${report.reportNumber}.pdf`,
+        path: pdfPath
+      }]
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: 'Email sent successfully to partner' });
+  } catch (error) {
+    console.error('Error in sendToPartner:', error);
+    res.status(500).json({ message: 'Failed to send email to partner' });
+  }
+};
+
+module.exports = {
+  getAllReports,
+  getPartnerReports,
+  getReportById,
+  createReport,
+  updateReport,
+  updatePartnerNote,
+  markAsRead,
+  sendReportToCustomer,
+  deleteReport,
+  updatePdf,
+  downloadReport,
+  sendToPartner
 };
 

@@ -12,7 +12,8 @@ const {
   deleteReport,
   updatePdf,
   downloadReport,
-  markAsRead
+  markAsRead,
+  sendToPartner
 } = require('../controllers/report.controller');
 
 // All routes are protected
@@ -37,6 +38,9 @@ router.get('/:id/download', protect, downloadReport);
 
 // Update PDF file
 router.put('/:id/pdf', adminOnly, updatePdf);
+
+// Send report to partner
+router.post('/:id/send-to-partner', adminOnly, sendToPartner);
 
 router.route('/:id')
   .put(adminOnly, updateReport)
