@@ -17,10 +17,16 @@ const reportSchema = new mongoose.Schema({
     required: [true, 'VN number is required'],
     trim: true
   },
-  pdfFile: {
-    type: String,  // URL/path to the stored PDF
-    required: [true, 'PDF file is required']
-  },
+  files: [{
+    originalName: String,
+    path: String,
+    mimeType: String,
+    size: Number,
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   adminNote: {
     type: String,
     trim: true

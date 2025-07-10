@@ -150,12 +150,14 @@ exports.getPartnerById = async (req, res) => {
 // Create new partner
 exports.createPartner = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, personName, personContact } = req.body;
 
     const partner = await Partner.create({
       name,
       email,
       password,
+      personName,
+      personContact,
       adminId: req.user._id
     });
 
@@ -165,6 +167,8 @@ exports.createPartner = async (req, res) => {
         id: partner._id,
         name: partner.name,
         email: partner.email,
+        personName: partner.personName,
+        personContact: partner.personContact,
         adminId: partner.adminId
       }
     });
@@ -176,7 +180,7 @@ exports.createPartner = async (req, res) => {
 // Update partner
 exports.updatePartner = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, personName, personContact } = req.body;
     const partner = await Partner.findById(req.params.id);
 
     if (!partner) {
@@ -190,6 +194,8 @@ exports.updatePartner = async (req, res) => {
 
     partner.name = name || partner.name;
     partner.email = email || partner.email;
+    partner.personName = personName;
+    partner.personContact = personContact;
 
     await partner.save();
 
@@ -199,6 +205,8 @@ exports.updatePartner = async (req, res) => {
         id: partner._id,
         name: partner.name,
         email: partner.email,
+        personName: partner.personName,
+        personContact: partner.personContact,
         adminId: partner.adminId
       }
     });

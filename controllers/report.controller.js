@@ -42,11 +42,8 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    // Generate unique filename with timestamp and original extension
-    const timestamp = Date.now();
-    const reportNumber = req.body.reportNumber || 'WO';
-    const extension = path.extname(file.originalname) || '.pdf';
-    cb(null, `${reportNumber}_${timestamp}${extension}`);
+    // Preserve original filename
+    cb(null, file.originalname);
   }
 });
 
@@ -54,16 +51,10 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: function (req, file, cb) {
-    // Accept only PDF files
-    if (file.mimetype !== 'application/pdf') {
-      return cb(new Error('Only PDF files are allowed'));
-    }
+    // Accept all file types
     cb(null, true);
-  },
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
   }
-}).single('pdfFile');
+}).array('files', 10); // Allow up to 10 files per upload
 
 // Get all reports
 const getAllReports = async (req, res) => {
@@ -135,18 +126,27 @@ const createReport = async (req, res) => {
         } = req.body;
 
         // Basic validation
-        if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.file) {
-          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and PDF File are required)' });
+        if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.files || req.files.length === 0) {
+          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and at least one file are required)' });
         }
 
         // Ensure report number has WO prefix
         const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
 
-        // Create the report with the file path
+        // Process uploaded files
+        const files = req.files.map(file => ({
+          originalName: file.originalname,
+          path: `/uploads/reports/${file.filename}`,
+          mimeType: file.mimetype,
+          size: file.size,
+          uploadedAt: new Date()
+        }));
+
+        // Create the report with the files
         const report = await Report.create({
           reportNumber: formattedReportNumber,
           vnNumber,
-          pdfFile: `/uploads/reports/${req.file.filename}`, // Store the relative path
+          files,
           adminNote,
           partnerId,
           customerId,
@@ -160,6 +160,12 @@ const createReport = async (req, res) => {
           // Get partner email for notification
           const partner = await Partner.findById(partnerId);
           if (partner && partner.email) {
+            // Prepare file attachments
+            const attachments = files.map(file => ({
+              filename: file.originalName,
+              path: path.join('.', file.path)
+            }));
+
             // Send email to partner
             const mailOptions = {
               from: process.env.EMAIL_FROM,
@@ -177,8 +183,10 @@ const createReport = async (req, res) => {
                   ${unitId ? `<li>Unit: ${(await Unit.findById(unitId)).unitName}</li>` : ''}
                   ${adminNote ? `<li>Admin Note: ${adminNote}</li>` : ''}
                 </ul>
-                <p>Please log in to your dashboard to view the full report.</p>
-              `
+                <p>The report files are attached to this email for your reference.</p>
+                <p>You can also log in to your dashboard to view the full report.</p>
+              `,
+              attachments
             };
 
             await transporter.sendMail(mailOptions);
@@ -194,12 +202,14 @@ const createReport = async (req, res) => {
           ])
         });
       } catch (error) {
-        // If there's an error and a file was uploaded, delete it
-        if (req.file) {
-          const filePath = path.join('./uploads/reports', req.file.filename);
+        // If there's an error and files were uploaded, delete them
+        if (req.files) {
+          req.files.forEach(file => {
+            const filePath = path.join('./uploads/reports', file.filename);
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
           }
+          });
         }
         console.error('Report creation error:', error);
         res.status(500).json({ message: error.message });
@@ -244,7 +254,7 @@ const updateReport = async (req, res) => {
     if (partnerId && partnerId !== report.partnerId._id.toString()) {
       const newPartner = await Partner.findById(partnerId);
       if (!newPartner || newPartner.adminId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Not authorized to assign report to this partner' });
+        return res.status(403).json({ message: 'Not authorized to assign reports to this partner' });
       }
     }
 
@@ -252,7 +262,7 @@ const updateReport = async (req, res) => {
     if (customerId) {
       const customer = await Customer.findById(customerId).populate('partnerId');
       if (!customer || customer.partnerId.adminId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Not authorized to assign report to this customer' });
+        return res.status(403).json({ message: 'Not authorized to assign reports to this customer' });
       }
     }
 
@@ -265,7 +275,7 @@ const updateReport = async (req, res) => {
         }
       });
       if (!unit || unit.customerId.partnerId.adminId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Not authorized to assign report to this unit' });
+        return res.status(403).json({ message: 'Not authorized to assign reports to this unit' });
       }
     }
 
@@ -282,15 +292,15 @@ const updateReport = async (req, res) => {
     await report.save();
 
     res.json({
-      message: 'Report updated successfully',
-      report: await report.populate([
+      message: 'Reports updated successfully',
+      reports: await report.populate([
         { path: 'partnerId', select: 'name email' },
         { path: 'customerId', select: 'name email' },
         { path: 'unitId', select: 'unitName' }
       ])
     });
   } catch (error) {
-    console.error('Error updating report:', error);
+    console.error('Error updating reports:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -344,15 +354,15 @@ const markAsRead = async (req, res) => {
     await report.save();
 
     res.json({
-      message: 'Report marked as read',
-      report: await report.populate([
+      message: 'Reports marked as read',
+      reports: await report.populate([
         { path: 'partnerId', select: 'name email' },
         { path: 'customerId', select: 'name email' },
         { path: 'unitId', select: 'unitName' }
       ])
     });
   } catch (error) {
-    console.error('Error marking report as read:', error);
+    console.error('Error marking reports as read:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -387,7 +397,6 @@ const sendReportToCustomer = async (req, res) => {
     let customerName;
 
     if (report.unitId && report.unitId.customerId) {
-      // If report is in a unit, use the unit's customer details
       customerEmail = report.unitId.customerId.email;
       customerName = report.unitId.customerId.name;
       console.log('Using unit customer information:', {
@@ -396,7 +405,6 @@ const sendReportToCustomer = async (req, res) => {
         unitName: report.unitId.unitName
       });
     } else if (report.customerId) {
-      // If report is directly in customer, use customer details
       customerEmail = report.customerId.email;
       customerName = report.customerId.name;
       console.log('Using direct customer information:', {
@@ -414,43 +422,55 @@ const sendReportToCustomer = async (req, res) => {
       throw new Error('Customer email not found for this report');
     }
 
-    const pdfPath = path.join(__dirname, '..', report.pdfFile);
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error('Report PDF file not found');
+    // Prepare file attachments
+    const attachments = await Promise.all(report.files.map(async file => {
+      const filePath = path.join(__dirname, '..', file.path);
+      if (!fs.existsSync(filePath)) {
+        console.warn(`File not found: ${filePath}`);
+        return null;
+      }
+      return {
+        filename: file.originalName,
+        path: filePath
+      };
+    }));
+
+    // Filter out any null attachments (files that weren't found)
+    const validAttachments = attachments.filter(att => att !== null);
+
+    if (validAttachments.length === 0) {
+      throw new Error('No valid files found to attach');
     }
 
     // Send email to customer
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: customerEmail,
-      subject: `Report ${report.reportNumber} Available`,
+      subject: `Report ${report.reportNumber} from ${report.partnerId.name}`,
       html: `
         <h2>Report Details</h2>
         <p>Dear ${customerName},</p>
-        <p>A new report is available for your review with the following details:</p>
+        <p>I hope this email finds you well, your report is ready to be reviewed.</p>
         <ul>
           <li>Report Number: ${report.reportNumber}</li>
           <li>VN Number: ${report.vnNumber}</li>
           <li>Status: ${report.status}</li>
-          <li>Partner: ${report.partnerId.name}</li>
-          <li>Partner Email: ${report.partnerId.email}</li>
           ${report.unitId ? `<li>Unit: ${report.unitId.unitName}</li>` : ''}
-          ${report.adminNote ? `<li>Admin Note: ${report.adminNote}</li>` : ''}
-          ${report.partnerNote ? `<li>Partner Note: ${report.partnerNote}</li>` : ''}
+          ${report.partnerNote ? `<li>Note: ${report.partnerNote}</li>` : ''}
         </ul>
-        <p>The report is attached to this email for your reference.</p>
-        <p>If you have any questions, please don't hesitate to contact your partner using the email address provided above.</p>
+        <p>I have attached the report files for your reference. Please review them at your convenience.</p>
+        <br/>
+        <p>Best regards,</p>
+        <p>${report.partnerId.name}</p>
       `,
-      attachments: [{
-        filename: `report_${report.reportNumber}.pdf`,
-        path: pdfPath
-      }]
+      attachments: validAttachments
     };
 
     console.log('Sending email to customer:', {
       to: customerEmail,
       subject: mailOptions.subject,
-      reportNumber: report.reportNumber
+      reportNumber: report.reportNumber,
+      attachmentCount: validAttachments.length
     });
 
     await transporter.sendMail(mailOptions);
@@ -475,34 +495,39 @@ const sendReportToCustomer = async (req, res) => {
 // Delete report
 const deleteReport = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id)
+    const reports = await Report.find({ _id: { $in: req.params.ids } })
       .populate({
         path: 'partnerId',
         select: 'adminId'
       });
 
-    if (!report) {
-      return res.status(404).json({ message: 'Report not found' });
+    if (reports.length === 0) {
+      return res.status(404).json({ message: 'Reports not found' });
     }
 
-    // Check if admin owns this report's partner
-    if (report.partnerId.adminId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
+    // Check if admin owns these reports' partners
+    const unauthorizedReports = reports.filter(report => report.partnerId.adminId.toString() !== req.user._id.toString());
+    if (unauthorizedReports.length > 0) {
+      return res.status(403).json({ message: 'Not authorized to delete these reports' });
     }
 
-    // Delete the PDF file if it exists
-    if (report.pdfFile) {
-      const filePath = path.join('.', report.pdfFile);
+    // Delete the PDF files if they exist
+    reports.forEach(report => {
+      if (report.pdfFiles) {
+        report.pdfFiles.forEach(pdfFile => {
+          const filePath = path.join('.', pdfFile);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
+        });
     }
+    });
 
-    await Report.findByIdAndDelete(req.params.id);
+    await Report.deleteMany({ _id: { $in: req.params.ids } });
 
-    res.json({ message: 'Report deleted successfully' });
+    res.json({ message: 'Reports deleted successfully' });
   } catch (error) {
-    console.error('Error deleting report:', error);
+    console.error('Error deleting reports:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -518,42 +543,57 @@ const updatePdf = async (req, res) => {
         return res.status(400).json({ message: err.message });
       }
 
-      if (!req.file) {
-        return res.status(400).json({ message: 'No PDF file provided' });
+      if (req.files.length === 0) {
+        return res.status(400).json({ message: 'No PDF files provided' });
       }
 
       try {
-        const report = await Report.findById(req.params.id);
-        if (!report) {
-          // Delete the newly uploaded file
-          if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-          }
-          return res.status(404).json({ message: 'Report not found' });
+        const reports = await Report.find({ _id: { $in: req.params.ids } });
+        if (reports.length === 0) {
+          // Delete the newly uploaded files
+          req.files.forEach(file => {
+            if (fs.existsSync(file.path)) {
+              fs.unlinkSync(file.path);
+            }
+          });
+          return res.status(404).json({ message: 'Reports not found' });
         }
 
-        // Delete old PDF file if it exists
-        if (report.pdfFile) {
-          const oldFilePath = path.join('.', report.pdfFile);
+        // Delete old PDF files if they exist
+        reports.forEach(report => {
+          if (report.pdfFiles) {
+            report.pdfFiles.forEach(pdfFile => {
+              const oldFilePath = path.join('.', pdfFile);
           if (fs.existsSync(oldFilePath)) {
             fs.unlinkSync(oldFilePath);
           }
-        }
+            });
+          }
+        });
 
-        // Update report with new PDF file path
-        report.pdfFile = `/uploads/reports/${req.file.filename}`;
-        await report.save();
+        // Update reports with new PDF file paths
+        const updatedReports = await Report.updateMany(
+          { _id: { $in: req.params.ids } },
+          { $set: { pdfFiles: req.files.map(file => `/uploads/reports/${file.originalname}`) } }
+        );
 
         res.json({
-          message: 'PDF file updated successfully',
-          pdfFile: report.pdfFile
+          message: 'PDF files updated successfully',
+          reports: await Report.find({ _id: { $in: req.params.ids } })
+            .populate([
+              { path: 'partnerId', select: 'name email' },
+              { path: 'customerId', select: 'name email' },
+              { path: 'unitId', select: 'unitName' }
+            ])
         });
       } catch (error) {
-        // Clean up the new file if there was an error
-        if (req.file && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
-        console.error('Error updating PDF:', error);
+        // Clean up the new files if there was an error
+        req.files.forEach(file => {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        });
+        console.error('Error updating PDF files:', error);
         res.status(500).json({ message: error.message });
       }
     });
@@ -562,7 +602,7 @@ const updatePdf = async (req, res) => {
   }
 };
 
-// Download report
+// Download report file
 const downloadReport = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
@@ -575,25 +615,27 @@ const downloadReport = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this report' });
     }
 
-    if (!report.pdfFile) {
-      return res.status(404).json({ message: 'No PDF file found for this report' });
+    // Find the specific file
+    const file = report.files.id(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
     }
 
-    const filePath = path.join('.', report.pdfFile);
+    const filePath = path.join('.', file.path);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'PDF file not found on server' });
+      return res.status(404).json({ message: 'File not found on server' });
     }
 
     // Set headers for file download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${path.basename(report.pdfFile)}`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename=${file.originalName}`);
 
     // Stream the file to the response
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   } catch (error) {
     console.error('Download error:', error);
-    res.status(500).json({ message: 'Failed to download report' });
+    res.status(500).json({ message: 'Failed to download file' });
   }
 };
 
@@ -613,13 +655,28 @@ const sendToPartner = async (req, res) => {
       return res.status(400).json({ message: 'Report has no associated partner' });
     }
 
-    if (!report.pdfFile) {
-      return res.status(400).json({ message: 'Report has no PDF file attached' });
+    if (!report.files || report.files.length === 0) {
+      return res.status(400).json({ message: 'Report has no files attached' });
     }
 
-    const pdfPath = path.join(__dirname, '..', report.pdfFile);
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error('Report PDF file not found');
+    // Prepare file attachments
+    const attachments = await Promise.all(report.files.map(async file => {
+      const filePath = path.join(__dirname, '..', file.path);
+      if (!fs.existsSync(filePath)) {
+        console.warn(`File not found: ${filePath}`);
+        return null;
+      }
+      return {
+        filename: file.originalName,
+        path: filePath
+      };
+    }));
+
+    // Filter out any null attachments (files that weren't found)
+    const validAttachments = attachments.filter(att => att !== null);
+
+    if (validAttachments.length === 0) {
+      throw new Error('No valid files found to attach');
     }
 
     const mailOptions = {
@@ -638,13 +695,10 @@ const sendToPartner = async (req, res) => {
           ${report.unitId ? `<li>Unit: ${report.unitId.unitName}</li>` : ''}
           ${report.adminNote ? `<li>Admin Note: ${report.adminNote}</li>` : ''}
         </ul>
-        <p>The report is attached to this email for your reference.</p>
+        <p>The report files are attached to this email for your reference.</p>
         <p>You can also view this report and manage your reports by logging into your dashboard.</p>
       `,
-      attachments: [{
-        filename: `${report.reportNumber}.pdf`,
-        path: pdfPath
-      }]
+      attachments: validAttachments
     };
 
     await transporter.sendMail(mailOptions);
@@ -653,6 +707,98 @@ const sendToPartner = async (req, res) => {
   } catch (error) {
     console.error('Error in sendToPartner:', error);
     res.status(500).json({ message: 'Failed to send email to partner' });
+  }
+};
+
+// Delete a specific file from a report
+const deleteReportFile = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Find the file in the report
+    const file = report.files.id(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Delete the physical file
+    const filePath = path.join('.', file.path);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Remove the file from the report's files array
+    report.files.pull(req.params.fileId);
+    await report.save();
+
+    res.json({ message: 'File deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Add new files to an existing report
+const addReportFiles = async (req, res) => {
+  try {
+    upload(req, res, async function (err) {
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({ message: 'File upload error: ' + err.message });
+      } else if (err) {
+        return res.status(400).json({ message: err.message });
+      }
+
+      try {
+        const report = await Report.findById(req.params.id);
+        if (!report) {
+          // Delete uploaded files if report not found
+          if (req.files) {
+            req.files.forEach(file => {
+              const filePath = path.join('./uploads/reports', file.filename);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+              }
+            });
+          }
+          return res.status(404).json({ message: 'Report not found' });
+        }
+
+        // Process uploaded files
+        const newFiles = req.files.map(file => ({
+          originalName: file.originalname,
+          path: `/uploads/reports/${file.filename}`,
+          mimeType: file.mimetype,
+          size: file.size,
+          uploadedAt: new Date()
+        }));
+
+        // Add new files to the report
+        report.files.push(...newFiles);
+        await report.save();
+
+        res.json({
+          message: 'Files added successfully',
+          files: newFiles
+        });
+      } catch (error) {
+        // Clean up uploaded files if there's an error
+        if (req.files) {
+          req.files.forEach(file => {
+            const filePath = path.join('./uploads/reports', file.filename);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          });
+        }
+        throw error;
+      }
+    });
+  } catch (error) {
+    console.error('Error adding files:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -668,6 +814,8 @@ module.exports = {
   deleteReport,
   updatePdf,
   downloadReport,
-  sendToPartner
+  sendToPartner,
+  deleteReportFile,
+  addReportFiles
 };
 

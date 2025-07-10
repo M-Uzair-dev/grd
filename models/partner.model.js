@@ -20,6 +20,14 @@ const partnerSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters']
   },
+  personName: {
+    type: String,
+    trim: true
+  },
+  personContact: {
+    type: String,
+    trim: true
+  },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

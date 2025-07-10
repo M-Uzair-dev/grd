@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - Corlee</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background-color: #000000;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        
+        .header-subtitle {
+            color: #cccccc;
+            font-size: 14px;
+            font-weight: 300;
+        }
+        
+        .content {
+            padding: 50px 40px;
+            text-align: center;
+        }
+        
+        .greeting {
+            font-size: 24px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 20px;
+        }
+        
+        .welcome-message {
+            font-size: 18px;
+            color: #000000;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+        
+        .message {
+            font-size: 16px;
+            color: #666666;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        
+        .cta-container {
+            margin: 40px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background-color: #000000;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 16px 40px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            border: 2px solid #000000;
+        }
+        
+        .cta-button:hover {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        
+        .verification-steps {
+            background-color: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 30px 0;
+            text-align: left;
+            border: 1px solid #e9ecef;
+        }
+        
+        .steps-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .step-number {
+            background-color: #000000;
+            color: #ffffff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        
+        .step-text {
+            font-size: 14px;
+            color: #666666;
+            line-height: 1.6;
+        }
+        
+        .alternative-link {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 25px 0;
+            border-left: 4px solid #000000;
+        }
+        
+        .alternative-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 8px;
+        }
+        
+        .link-text {
+            font-size: 12px;
+            color: #666666;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            background-color: #ffffff;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px 40px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer-text {
+            font-size: 13px;
+            color: #999999;
+            line-height: 1.6;
+        }
+        
+        .divider {
+            height: 1px;
+            background-color: #e9ecef;
+            margin: 30px 0;
+        }
+        
+        .checkmark {
+            color: #000000;
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                margin: 10px;
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 30px 25px;
+            }
+            
+            .header {
+                padding: 30px 25px;
+            }
+            
+            .logo {
+                font-size: 28px;
+            }
+            
+            .greeting {
+                font-size: 20px;
+            }
+            
+            .welcome-message {
+                font-size: 16px;
+            }
+            
+            .cta-button {
+                padding: 14px 30px;
+                font-size: 15px;
+            }
+            
+            .verification-steps {
+                padding: 20px;
+            }
+            
+            .step {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .step-number {
+                margin-bottom: 10px;
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0; padding: 20px 0; background-color: #f8f9fa;">
+        <tr>
+            <td align="center">
+                <div class="email-container">
+                    <!-- Header -->
+                    <div class="header">
+                        <div class="logo">CORLEE</div>
+                        <div class="header-subtitle">Premium Fabric Solutions</div>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="content">
+                        <h1 class="greeting">Hello {{ name }}!</h1>
+                        
+                        <p class="welcome-message">
+                            <span class="checkmark">✓</span>Welcome to Corlee!
+                        </p>
+                        
+                        <p class="message">
+                            Thank you for joining our community of fabric enthusiasts. 
+                            To complete your registration and access all features, please verify your email address.
+                        </p>
+                        
+                        <div class="cta-container">
+                            <a href="{{ verification_url }}" class="cta-button">
+                                {{ button_text }}
+                            </a>
+                        </div>
+                        
+                        <div class="verification-steps">
+                            <div class="steps-title">What happens after verification?</div>
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-text">Access our complete fabric catalog and collections</div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-text">Save favorites and create personalized lists</div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-text">Receive exclusive updates and offers</div>
+                            </div>
+                        </div>
+                        
+                        <div class="alternative-link">
+                            <div class="alternative-title">Trouble with the button?</div>
+                            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                                Copy and paste this link into your browser:
+                            </p>
+                            <div class="link-text">{{ verification_url }}</div>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <p class="message" style="font-size: 14px; color: #999;">
+                            If you didn't create an account with Corlee, you can safely ignore this email. 
+                            This verification link will expire in 24 hours.
+                        </p>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="footer">
+                        <p class="footer-text">
+                            This email was sent by Corlee. If you have any questions, 
+                            please contact our support team.
+                        </p>
+                        <p class="footer-text" style="margin-top: 15px;">
+                            © 2024 Corlee. All rights reserved.
+                        </p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

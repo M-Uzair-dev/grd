@@ -13,7 +13,9 @@ const {
   updatePdf,
   downloadReport,
   markAsRead,
-  sendToPartner
+  sendToPartner,
+  deleteReportFile,
+  addReportFiles
 } = require('../controllers/report.controller');
 
 // All routes are protected
@@ -33,11 +35,12 @@ router.post('/:id/mark-read', partnerOnly, markAsRead);
 // Get single report
 router.get('/:id', protect, getReportById);
 
-// Download report
-router.get('/:id/download', protect, downloadReport);
+// Download specific file from report
+router.get('/:id/download/:fileId', protect, downloadReport);
 
-// Update PDF file
-router.put('/:id/pdf', adminOnly, updatePdf);
+// File management routes
+router.post('/:id/files', adminOnly, addReportFiles);
+router.delete('/:id/files/:fileId', adminOnly, deleteReportFile);
 
 // Send report to partner
 router.post('/:id/send-to-partner', adminOnly, sendToPartner);
