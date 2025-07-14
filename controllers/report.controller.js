@@ -5,7 +5,6 @@ const Unit = require('../models/unit.model');
 const Customer = require('../models/customer.model');
 const Partner = require('../models/partner.model');
 const nodemailer = require('nodemailer');
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
@@ -31,30 +30,6 @@ transporter.verify(function (error, success) {
     console.log('Email server is ready to send messages');
   }
 });
-
-// Configure multer for disk storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = './uploads/reports';
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    // Preserve original filename
-    cb(null, file.originalname);
-  }
-});
-
-// Configure multer upload
-const upload = multer({
-  storage: storage,
-  fileFilter: function (req, file, cb) {
-    // Accept all file types
-    cb(null, true);
-  }
-}).array('files', 10); // Allow up to 10 files per upload
 
 // Get all reports
 const getAllReports = async (req, res) => {
@@ -105,129 +80,115 @@ const getReportById = async (req, res) => {
 // Create new report
 const createReport = async (req, res) => {
   try {
-    // Handle file upload
-    upload(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({ message: 'File upload error: ' + err.message });
-      } else if (err) {
-        return res.status(400).json({ message: err.message });
-      }
+    const { 
+      reportNumber, 
+      vnNumber, 
+      adminNote, 
+      partnerId, 
+      customerId, 
+      unitId,
+      status,
+      sendEmail
+    } = req.body;
 
-      try {
-        const { 
-          reportNumber, 
-          vnNumber, 
-          adminNote, 
-          partnerId, 
-          customerId, 
-          unitId,
-          status,
-          sendEmail
-        } = req.body;
+    // Basic validation
+    if (!reportNumber || !vnNumber || !partnerId || !req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, and at least one file are required)' });
+    }
 
-        // Basic validation
-        if (!reportNumber || !vnNumber || !partnerId || !req.files || req.files.length === 0) {
-          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, and at least one file are required)' });
-        }
+    // Ensure report number has WO prefix
+    const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
 
-        // Ensure report number has WO prefix
-        const formattedReportNumber = reportNumber.startsWith('WO') ? reportNumber : `WO${reportNumber}`;
+    // Process uploaded files
+    const files = req.files.map(file => ({
+      originalName: file.originalname,
+      path: `/uploads/reports/${file.filename}`,
+      mimeType: file.mimetype,
+      size: file.size,
+      uploadedAt: new Date()
+    }));
 
-        // Process uploaded files
-        const files = req.files.map(file => ({
-          originalName: file.originalname,
-          path: `/uploads/reports/${file.filename}`,
-          mimeType: file.mimetype,
-          size: file.size,
-          uploadedAt: new Date()
+    // Create the report with the files
+    const report = await Report.create({
+      reportNumber: formattedReportNumber,
+      vnNumber,
+      files,
+      adminNote,
+      partnerId,
+      customerId: customerId || undefined,
+      unitId: unitId || undefined,
+      status,
+      isNew: true
+    });
+
+    // Only send email if sendEmail is true
+    if (sendEmail === 'true') {
+      // Get partner email for notification
+      const partner = await Partner.findById(partnerId);
+      if (partner && partner.email) {
+        // Prepare file attachments
+        const attachments = files.map(file => ({
+          filename: file.originalName,
+          path: path.join('.', file.path)
         }));
 
-        // Create the report with the files
-        const report = await Report.create({
-          reportNumber: formattedReportNumber,
-          vnNumber,
-          files,
-          adminNote,
-          partnerId,
-          customerId: customerId || undefined,
-          unitId: unitId || undefined,
-          status,
-          isNew: true
-        });
-
-        // Only send email if sendEmail is true
-        if (sendEmail === 'true') {
-          // Get partner email for notification
-          const partner = await Partner.findById(partnerId);
-          if (partner && partner.email) {
-            // Prepare file attachments
-            const attachments = files.map(file => ({
-              filename: file.originalName,
-              path: path.join('.', file.path)
-            }));
-
-            // Compose customer/unit info for email
-            let customerName = '';
-            let unitName = '';
-            if (customerId) {
-              const customer = await Customer.findById(customerId);
-              customerName = customer ? customer.name : '';
-            }
-            if (unitId) {
-              const unit = await Unit.findById(unitId);
-              unitName = unit ? unit.unitName : '';
-            }
-
-            // Send email to partner
-            const mailOptions = {
-              from: process.env.EMAIL_FROM,
-              to: partner.email,
-              subject: `New Report Available - ${formattedReportNumber}`,
-              html: `
-                <h2>New Report Available</h2>
-                <p>Hello ${partner.name},</p>
-                <p>A new report has been generated with the following details:</p>
-                <ul>
-                  <li>Report Number: ${formattedReportNumber}</li>
-                  <li>VN Number: ${vnNumber}</li>
-                  <li>Status: ${status}</li>
-                  ${customerName ? `<li>Customer: ${customerName}</li>` : ''}
-                  ${unitName ? `<li>Unit: ${unitName}</li>` : ''}
-                  ${adminNote ? `<li>Admin Note: ${adminNote}</li>` : ''}
-                </ul>
-                <p>The report files are attached to this email for your reference.</p>
-                <p>You can also log in to your dashboard to view the full report.</p>
-              `,
-              attachments
-            };
-
-            await transporter.sendMail(mailOptions);
-          }
+        // Compose customer/unit info for email
+        let customerName = '';
+        let unitName = '';
+        if (customerId) {
+          const customer = await Customer.findById(customerId);
+          customerName = customer ? customer.name : '';
+        }
+        if (unitId) {
+          const unit = await Unit.findById(unitId);
+          unitName = unit ? unit.unitName : '';
         }
 
-        res.status(201).json({
-          message: 'Report created successfully',
-          report: await report.populate([
-            { path: 'partnerId', select: 'name email' },
-            { path: 'customerId', select: 'name email' },
-            { path: 'unitId', select: 'unitName' }
-          ])
-        });
-      } catch (error) {
-        // If there's an error and files were uploaded, delete them
-        if (req.files) {
-          req.files.forEach(file => {
-            const filePath = path.join('./uploads/reports', file.filename);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-          });
-        }
-        console.error('Report creation error:', error);
-        res.status(500).json({ message: error.message });
+        // Send email to partner
+        const mailOptions = {
+          from: process.env.EMAIL_FROM,
+          to: partner.email,
+          subject: `New Report Available - ${formattedReportNumber}`,
+          html: `
+            <h2>New Report Available</h2>
+            <p>Hello ${partner.name},</p>
+            <p>A new report has been generated with the following details:</p>
+            <ul>
+              <li>Report Number: ${formattedReportNumber}</li>
+              <li>VN Number: ${vnNumber}</li>
+              <li>Status: ${status}</li>
+              ${customerName ? `<li>Customer: ${customerName}</li>` : ''}
+              ${unitName ? `<li>Unit: ${unitName}</li>` : ''}
+              ${adminNote ? `<li>Admin Note: ${adminNote}</li>` : ''}
+            </ul>
+            <p>The report files are attached to this email for your reference.</p>
+            <p>You can also log in to your dashboard to view the full report.</p>
+          `,
+          attachments
+        };
+
+        await transporter.sendMail(mailOptions);
       }
+    }
+
+    res.status(201).json({
+      message: 'Report created successfully',
+      report: await report.populate([
+        { path: 'partnerId', select: 'name email' },
+        { path: 'customerId', select: 'name email' },
+        { path: 'unitId', select: 'unitName' }
+      ])
     });
   } catch (error) {
+    // If there's an error and files were uploaded, delete them
+    if (req.files) {
+      req.files.forEach(file => {
+        const filePath = path.join('./uploads/reports', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
     console.error('Report creation error:', error);
     res.status(500).json({ message: error.message });
   }
@@ -550,68 +511,59 @@ const deleteReport = async (req, res) => {
 // Update PDF file
 const updatePdf = async (req, res) => {
   try {
-    // Handle file upload
-    upload(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({ message: 'File upload error: ' + err.message });
-      } else if (err) {
-        return res.status(400).json({ message: err.message });
-      }
+    if (req.files.length === 0) {
+      return res.status(400).json({ message: 'No PDF files provided' });
+    }
 
-      if (req.files.length === 0) {
-        return res.status(400).json({ message: 'No PDF files provided' });
-      }
-
-      try {
-        const reports = await Report.find({ _id: { $in: req.params.ids } });
-        if (reports.length === 0) {
-          // Delete the newly uploaded files
-          req.files.forEach(file => {
-            if (fs.existsSync(file.path)) {
-              fs.unlinkSync(file.path);
-            }
-          });
-          return res.status(404).json({ message: 'Reports not found' });
-        }
-
-        // Delete old PDF files if they exist
-        reports.forEach(report => {
-          if (report.pdfFiles) {
-            report.pdfFiles.forEach(pdfFile => {
-              const oldFilePath = path.join('.', pdfFile);
-          if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-          }
-            });
-          }
-        });
-
-        // Update reports with new PDF file paths
-        const updatedReports = await Report.updateMany(
-          { _id: { $in: req.params.ids } },
-          { $set: { pdfFiles: req.files.map(file => `/uploads/reports/${file.originalname}`) } }
-        );
-
-        res.json({
-          message: 'PDF files updated successfully',
-          reports: await Report.find({ _id: { $in: req.params.ids } })
-            .populate([
-              { path: 'partnerId', select: 'name email' },
-              { path: 'customerId', select: 'name email' },
-              { path: 'unitId', select: 'unitName' }
-            ])
-        });
-      } catch (error) {
-        // Clean up the new files if there was an error
+    try {
+      const reports = await Report.find({ _id: { $in: req.params.ids } });
+      if (reports.length === 0) {
+        // Delete the newly uploaded files
         req.files.forEach(file => {
           if (fs.existsSync(file.path)) {
             fs.unlinkSync(file.path);
           }
         });
-        console.error('Error updating PDF files:', error);
-        res.status(500).json({ message: error.message });
+        return res.status(404).json({ message: 'Reports not found' });
       }
-    });
+
+      // Delete old PDF files if they exist
+      reports.forEach(report => {
+        if (report.pdfFiles) {
+          report.pdfFiles.forEach(pdfFile => {
+            const oldFilePath = path.join('.', pdfFile);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+          });
+        }
+      });
+
+      // Update reports with new PDF file paths
+      const updatedReports = await Report.updateMany(
+        { _id: { $in: req.params.ids } },
+        { $set: { pdfFiles: req.files.map(file => `/uploads/reports/${file.originalname}`) } }
+      );
+
+      res.json({
+        message: 'PDF files updated successfully',
+        reports: await Report.find({ _id: { $in: req.params.ids } })
+          .populate([
+            { path: 'partnerId', select: 'name email' },
+            { path: 'customerId', select: 'name email' },
+            { path: 'unitId', select: 'unitName' }
+          ])
+      });
+    } catch (error) {
+      // Clean up the new files if there was an error
+      req.files.forEach(file => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+      console.error('Error updating PDF files:', error);
+      res.status(500).json({ message: error.message });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -759,47 +711,14 @@ const deleteReportFile = async (req, res) => {
 // Add new files to an existing report
 const addReportFiles = async (req, res) => {
   try {
-    upload(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({ message: 'File upload error: ' + err.message });
-      } else if (err) {
-        return res.status(400).json({ message: err.message });
-      }
+    if (req.files.length === 0) {
+      return res.status(400).json({ message: 'No files provided' });
+    }
 
-      try {
-        const report = await Report.findById(req.params.id);
-        if (!report) {
-          // Delete uploaded files if report not found
-          if (req.files) {
-            req.files.forEach(file => {
-              const filePath = path.join('./uploads/reports', file.filename);
-              if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-              }
-            });
-          }
-          return res.status(404).json({ message: 'Report not found' });
-        }
-
-        // Process uploaded files
-        const newFiles = req.files.map(file => ({
-          originalName: file.originalname,
-          path: `/uploads/reports/${file.filename}`,
-          mimeType: file.mimetype,
-          size: file.size,
-          uploadedAt: new Date()
-        }));
-
-        // Add new files to the report
-        report.files.push(...newFiles);
-        await report.save();
-
-        res.json({
-          message: 'Files added successfully',
-          files: newFiles
-        });
-      } catch (error) {
-        // Clean up uploaded files if there's an error
+    try {
+      const report = await Report.findById(req.params.id);
+      if (!report) {
+        // Delete uploaded files if report not found
         if (req.files) {
           req.files.forEach(file => {
             const filePath = path.join('./uploads/reports', file.filename);
@@ -808,9 +727,38 @@ const addReportFiles = async (req, res) => {
             }
           });
         }
-        throw error;
+        return res.status(404).json({ message: 'Report not found' });
       }
-    });
+
+      // Process uploaded files
+      const newFiles = req.files.map(file => ({
+        originalName: file.originalname,
+        path: `/uploads/reports/${file.filename}`,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date()
+      }));
+
+      // Add new files to the report
+      report.files.push(...newFiles);
+      await report.save();
+
+      res.json({
+        message: 'Files added successfully',
+        files: newFiles
+      });
+    } catch (error) {
+      // Clean up uploaded files if there's an error
+      if (req.files) {
+        req.files.forEach(file => {
+          const filePath = path.join('./uploads/reports', file.filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error adding files:', error);
     res.status(500).json({ message: error.message });
