@@ -28,9 +28,9 @@ router.route('/')
 
 // Partner routes - these need to be before /:id routes
 router.get('/partner', partnerOnly, getPartnerReports);
-router.put('/:id/partner-note', partnerOnly, updatePartnerNote);
-router.post('/:id/send', partnerOnly, sendReportToCustomer);
-router.post('/:id/mark-read', partnerOnly, markAsRead);
+router.put('/:id/partner-note', express.json(), partnerOnly, updatePartnerNote);
+router.post('/:id/send', express.json(), partnerOnly, sendReportToCustomer);
+router.post('/:id/mark-read', express.json(), partnerOnly, markAsRead);
 
 // Get single report
 router.get('/:id', protect, getReportById);
@@ -43,10 +43,10 @@ router.post('/:id/files', adminOnly, addReportFiles);
 router.delete('/:id/files/:fileId', adminOnly, deleteReportFile);
 
 // Send report to partner
-router.post('/:id/send-to-partner', adminOnly, sendToPartner);
+router.post('/:id/send-to-partner', express.json(), adminOnly, sendToPartner);
 
 router.route('/:id')
-  .put(adminOnly, updateReport)
+  .put(express.json(), adminOnly, updateReport)
   .delete(adminOnly, deleteReport);
 
 module.exports = router;

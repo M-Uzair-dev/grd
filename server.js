@@ -6,8 +6,7 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
-app.use(express.json());
+// CORS middleware
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -20,18 +19,14 @@ app.options('*', cors());
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
-const authRoutes = require('./routes/auth.routes');
-const partnerRoutes = require('./routes/partner.routes');
-const customerRoutes = require('./routes/customer.routes');
-const unitRoutes = require('./routes/unit.routes');
-const reportRoutes = require('./routes/report.routes');
+// Routes that need JSON parsing (no file uploads)
+app.use('/api/auth', express.json(), require('./routes/auth.routes'));
+app.use('/api/partners', express.json(), require('./routes/partner.routes'));
+app.use('/api/customers', express.json(), require('./routes/customer.routes'));
+app.use('/api/units', express.json(), require('./routes/unit.routes'));
 
-app.use('/api/auth', authRoutes);
-app.use('/api/partners', partnerRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/units', unitRoutes);
-app.use('/api/reports', reportRoutes);
+// Reports route - NO express.json() to allow multer to handle multipart requests
+app.use('/api/reports', require('./routes/report.routes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
