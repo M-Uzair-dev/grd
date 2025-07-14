@@ -80,6 +80,11 @@ const getReportById = async (req, res) => {
 // Create new report
 const createReport = async (req, res) => {
   try {
+    // Check if files were uploaded
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files were uploaded. Please select at least one file.' });
+    }
+
     const { 
       reportNumber, 
       vnNumber, 
@@ -92,8 +97,8 @@ const createReport = async (req, res) => {
     } = req.body;
 
     // Basic validation
-    if (!reportNumber || !vnNumber || !partnerId || !req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, and at least one file are required)' });
+    if (!reportNumber || !vnNumber || !partnerId) {
+      return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, and Partner are required)' });
     }
 
     // Ensure report number has WO prefix
