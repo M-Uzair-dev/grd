@@ -52,36 +52,15 @@ const reportSchema = new mongoose.Schema({
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer',
-    required: function() {
-      return !this.unitId;
-    }
+    required: false
   },
   unitId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Unit',
-    required: function() {
-      return !this.customerId;
-    }
+    required: false
   }
 }, {
   timestamps: true
-});
-
-// Middleware to ensure either unitId or customerId is present, but not both
-reportSchema.pre('save', function(next) {
-  if (this.unitId) {
-    // If unitId is provided, ensure it's a valid ObjectId
-    if (!mongoose.Types.ObjectId.isValid(this.unitId)) {
-      this.unitId = null;
-    }
-  }
-
-  // If no unitId is provided or it's invalid, ensure customerId is present
-  if (!this.unitId && !this.customerId) {
-    next(new Error('Either unitId or customerId must be provided'));
-  }
-
-  next();
 });
 
 const Report = mongoose.model('Report', reportSchema);

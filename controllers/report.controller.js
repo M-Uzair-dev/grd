@@ -126,8 +126,8 @@ const createReport = async (req, res) => {
         } = req.body;
 
         // Basic validation
-        if (!reportNumber || !vnNumber || !partnerId || !customerId || !req.files || req.files.length === 0) {
-          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, Customer, and at least one file are required)' });
+        if (!reportNumber || !vnNumber || !partnerId || !req.files || req.files.length === 0) {
+          return res.status(400).json({ message: 'Missing required fields (Report Number, VN Number, Partner, and at least one file are required)' });
         }
 
         // Ensure report number has WO prefix
@@ -149,8 +149,8 @@ const createReport = async (req, res) => {
           files,
           adminNote,
           partnerId,
-          customerId,
-          unitId,
+          customerId: customerId || undefined,
+          unitId: unitId || undefined,
           status,
           isNew: true
         });
@@ -166,6 +166,18 @@ const createReport = async (req, res) => {
               path: path.join('.', file.path)
             }));
 
+            // Compose customer/unit info for email
+            let customerName = '';
+            let unitName = '';
+            if (customerId) {
+              const customer = await Customer.findById(customerId);
+              customerName = customer ? customer.name : '';
+            }
+            if (unitId) {
+              const unit = await Unit.findById(unitId);
+              unitName = unit ? unit.unitName : '';
+            }
+
             // Send email to partner
             const mailOptions = {
               from: process.env.EMAIL_FROM,
@@ -179,8 +191,8 @@ const createReport = async (req, res) => {
                   <li>Report Number: ${formattedReportNumber}</li>
                   <li>VN Number: ${vnNumber}</li>
                   <li>Status: ${status}</li>
-                  <li>Customer: ${(await Customer.findById(customerId)).name}</li>
-                  ${unitId ? `<li>Unit: ${(await Unit.findById(unitId)).unitName}</li>` : ''}
+                  ${customerName ? `<li>Customer: ${customerName}</li>` : ''}
+                  ${unitName ? `<li>Unit: ${unitName}</li>` : ''}
                   ${adminNote ? `<li>Admin Note: ${adminNote}</li>` : ''}
                 </ul>
                 <p>The report files are attached to this email for your reference.</p>
@@ -411,6 +423,9 @@ const sendReportToCustomer = async (req, res) => {
         customerEmail,
         customerName
       });
+    } else {
+      // No customer or unit present
+      return res.status(400).json({ message: 'No customer or unit associated with this report to send to.' });
     }
 
     if (!customerEmail) {

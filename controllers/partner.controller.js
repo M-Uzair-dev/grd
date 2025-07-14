@@ -61,6 +61,22 @@ exports.getPartnerNested = async (req, res) => {
       customer.reports = customerReports;
     }
 
+    // Fetch reports directly under the partner (no customerId, no unitId)
+    const partnerReports = await Report.find({
+      partnerId: partner._id,
+      $or: [
+        { customerId: null },
+        { customerId: { $exists: false } }
+      ],
+      $or: [
+        { unitId: null },
+        { unitId: { $exists: false } }
+      ]
+    })
+      .select('reportNumber vnNumber isNew status _id')
+      .lean();
+    partner.reports = partnerReports;
+
     partner.customers = customers;
     res.json([partner]); // Return as array to match admin format
   } catch (error) {
@@ -111,6 +127,22 @@ exports.getAllPartnersNested = async (req, res) => {
         customer.reports = customerReports;
       }
 
+      // Fetch reports directly under the partner (no customerId, no unitId)
+      const partnerReports = await Report.find({
+        partnerId: partner._id,
+        $or: [
+          { customerId: null },
+          { customerId: { $exists: false } }
+        ],
+        $or: [
+          { unitId: null },
+          { unitId: { $exists: false } }
+        ]
+      })
+        .select('reportNumber vnNumber isNew status _id')
+        .lean();
+      partner.reports = partnerReports;
+
       partner.customers = customers;
     }
 
@@ -137,7 +169,8 @@ exports.getAdminPartners = async (req, res) => {
 // Get a single partner by ID
 exports.getPartnerById = async (req, res) => {
   try {
-    const partner = await Partner.findById(req.params.id);
+    const partner = await Partner.findById(req.params.id).select('-password');
+    console.log(partner)
     if (!partner) {
       return res.status(404).json({ message: 'Partner not found' });
     }
@@ -160,6 +193,7 @@ exports.createPartner = async (req, res) => {
       personContact,
       adminId: req.user._id
     });
+    console.log(partner)
 
     res.status(201).json({
       message: 'Partner created successfully',
