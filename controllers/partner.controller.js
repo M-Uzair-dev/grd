@@ -61,6 +61,19 @@ exports.getPartnerNested = async (req, res) => {
       customer.reports = customerReports;
     }
 
+    // Get partner-level units
+    const partnerUnits = await Unit.find({ partnerId: partner._id })
+      .select('unitName _id')
+      .lean();
+
+    // For each partner unit, get its reports
+    for (let unit of partnerUnits) {
+      const unitReports = await Report.find({ unitId: unit._id })
+        .select('reportNumber vnNumber status isNew _id')
+        .lean();
+      unit.reports = unitReports;
+    }
+
     // Fetch reports directly under the partner (no customerId, no unitId)
     const partnerReports = await Report.find({
       partnerId: partner._id,
@@ -78,6 +91,7 @@ exports.getPartnerNested = async (req, res) => {
     partner.reports = partnerReports;
 
     partner.customers = customers;
+    partner.units = partnerUnits;
     res.json([partner]); // Return as array to match admin format
   } catch (error) {
     console.error('Error fetching partner nested data:', error);
@@ -127,6 +141,19 @@ exports.getAllPartnersNested = async (req, res) => {
         customer.reports = customerReports;
       }
 
+      // Get partner-level units
+      const partnerUnits = await Unit.find({ partnerId: partner._id })
+        .select('unitName _id')
+        .lean();
+
+      // For each partner unit, get its reports
+      for (let unit of partnerUnits) {
+        const unitReports = await Report.find({ unitId: unit._id })
+          .select('reportNumber vnNumber isNew _id')
+          .lean();
+        unit.reports = unitReports;
+      }
+
       // Fetch reports directly under the partner (no customerId, no unitId)
       const partnerReports = await Report.find({
         partnerId: partner._id,
@@ -144,6 +171,7 @@ exports.getAllPartnersNested = async (req, res) => {
       partner.reports = partnerReports;
 
       partner.customers = customers;
+      partner.units = partnerUnits;
     }
 
     res.json(partners);

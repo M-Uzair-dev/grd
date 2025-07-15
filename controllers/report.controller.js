@@ -244,16 +244,34 @@ const updateReport = async (req, res) => {
       }
     }
 
-    // If changing unit, verify it belongs to the customer
+    // If changing unit, verify it belongs to either the customer or partner
     if (unitId) {
-      const unit = await Unit.findById(unitId).populate({
-        path: 'customerId',
-        populate: {
-          path: 'partnerId'
+      const unit = await Unit.findById(unitId)
+        .populate({
+          path: 'customerId',
+          populate: {
+            path: 'partnerId'
+          }
+        })
+        .populate('partnerId');
+
+      if (!unit) {
+        return res.status(404).json({ message: 'Unit not found' });
+      }
+
+      // Check authorization based on unit association
+      if (unit.customerId) {
+        // Unit belongs to a customer
+        if (unit.customerId.partnerId.adminId.toString() !== req.user._id.toString()) {
+          return res.status(403).json({ message: 'Not authorized to assign reports to this unit' });
         }
-      });
-      if (!unit || unit.customerId.partnerId.adminId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Not authorized to assign reports to this unit' });
+      } else if (unit.partnerId) {
+        // Unit belongs to a partner
+        if (unit.partnerId.adminId.toString() !== req.user._id.toString()) {
+          return res.status(403).json({ message: 'Not authorized to assign reports to this unit' });
+        }
+      } else {
+        return res.status(400).json({ message: 'Invalid unit: must be associated with either customer or partner' });
       }
     }
 
@@ -264,21 +282,21 @@ const updateReport = async (req, res) => {
     report.partnerNote = partnerNote !== undefined ? partnerNote : report.partnerNote;
     report.status = status || report.status;
     report.partnerId = partnerId || report.partnerId;
-    report.customerId = customerId || report.customerId;
+    report.customerId = customerId === '' ? null : (customerId || report.customerId); // Allow removing customer by setting to empty string
     report.unitId = unitId === '' ? null : (unitId || report.unitId); // Allow removing unit by setting to empty string
 
     await report.save();
 
     res.json({
-      message: 'Reports updated successfully',
-      reports: await report.populate([
+      message: 'Report updated successfully',
+      report: await report.populate([
         { path: 'partnerId', select: 'name email' },
         { path: 'customerId', select: 'name email' },
         { path: 'unitId', select: 'unitName' }
       ])
     });
   } catch (error) {
-    console.error('Error updating reports:', error);
+    console.error('Error updating report:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -358,10 +376,10 @@ const sendReportToCustomer = async (req, res) => {
         { path: 'customerId', select: 'name email' },
         { 
           path: 'unitId',
-          populate: {
-            path: 'customerId',
-            select: 'name email'
-          }
+          populate: [
+            { path: 'customerId', select: 'name email' },
+            { path: 'partnerId', select: 'name email' }
+          ]
         }
       ]);
 
@@ -374,14 +392,28 @@ const sendReportToCustomer = async (req, res) => {
     let customerEmail;
     let customerName;
 
-    if (report.unitId && report.unitId.customerId) {
-      customerEmail = report.unitId.customerId.email;
-      customerName = report.unitId.customerId.name;
-      console.log('Using unit customer information:', {
-        customerEmail,
-        customerName,
-        unitName: report.unitId.unitName
-      });
+    if (report.unitId) {
+      // Unit is associated with either a customer or partner
+      if (report.unitId.customerId) {
+        // Unit belongs to a customer
+        customerEmail = report.unitId.customerId.email;
+        customerName = report.unitId.customerId.name;
+        console.log('Using unit customer information:', {
+          customerEmail,
+          customerName,
+          unitName: report.unitId.unitName
+        });
+      } else if (report.unitId.partnerId) {
+        // Unit belongs to a partner - we can't send to partner directly
+        // This should not happen in normal flow, but handle gracefully
+        console.log('Unit belongs to partner, cannot send to customer:', {
+          unitName: report.unitId.unitName,
+          partnerName: report.unitId.partnerId.name
+        });
+        return res.status(400).json({ 
+          message: 'Cannot send report to customer: Unit is associated with partner, not customer.' 
+        });
+      }
     } else if (report.customerId) {
       customerEmail = report.customerId.email;
       customerName = report.customerId.name;

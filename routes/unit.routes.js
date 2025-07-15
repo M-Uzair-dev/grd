@@ -4,6 +4,7 @@ const { protect, adminOnly } = require('../middleware/auth.middleware');
 const {
   getAllUnits,
   getCustomerUnits,
+  getPartnerUnits,
   createUnit,
   updateUnit,
   deleteUnit,
@@ -15,6 +16,7 @@ router.use(protect);
 
 // Routes that both admin and partner can access
 router.get('/customer/:customerId', getCustomerUnits);
+router.get('/partner/:partnerId', getPartnerUnits);
 router.get('/:id', getUnitById);
 
 // Admin-only routes

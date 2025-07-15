@@ -20,10 +20,10 @@ app.options('*', cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes that need JSON parsing (no file uploads)
-app.use('/api/auth', express.json(), require('./routes/auth.routes'));
-app.use('/api/partners', express.json(), require('./routes/partner.routes'));
-app.use('/api/customers', express.json(), require('./routes/customer.routes'));
-app.use('/api/units', express.json(), require('./routes/unit.routes'));
+app.use('/api/auth', express.json({ limit: '10mb' }), require('./routes/auth.routes'));
+app.use('/api/partners', express.json({ limit: '10mb' }), require('./routes/partner.routes'));
+app.use('/api/customers', express.json({ limit: '10mb' }), require('./routes/customer.routes'));
+app.use('/api/units', express.json({ limit: '10mb' }), require('./routes/unit.routes'));
 
 // Reports route - NO express.json() to allow multer to handle multipart requests
 app.use('/api/reports', require('./routes/report.routes'));
