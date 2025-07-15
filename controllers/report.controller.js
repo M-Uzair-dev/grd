@@ -519,21 +519,29 @@ const deleteReport = async (req, res) => {
     }
 
     // Check if admin owns these reports' partners
-    const unauthorizedReports = reports.filter(report => report.partnerId.adminId.toString() !== req.user._id.toString());
+    const unauthorizedReports = reports.filter(report => {
+      // Ensure partnerId exists and has adminId
+      if (!report.partnerId || !report.partnerId.adminId) {
+        console.error('Report missing partner or admin data:', report._id);
+        return true; // Mark as unauthorized if data is missing
+      }
+      return report.partnerId.adminId.toString() !== req.user._id.toString();
+    });
+    
     if (unauthorizedReports.length > 0) {
       return res.status(403).json({ message: 'Not authorized to delete these reports' });
     }
 
-    // Delete the PDF files if they exist
+    // Delete the files if they exist
     reports.forEach(report => {
-      if (report.pdfFiles) {
-        report.pdfFiles.forEach(pdfFile => {
-          const filePath = path.join('.', pdfFile);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      if (report.files && report.files.length > 0) {
+        report.files.forEach(file => {
+          const filePath = path.join('.', file.path);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
         });
-    }
+      }
     });
 
     await Report.deleteMany({ _id: { $in: req.params.ids } });
