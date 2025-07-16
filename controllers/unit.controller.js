@@ -353,4 +353,43 @@ exports.getUnitById = async (req, res) => {
     console.error('Error fetching unit:', error);
     res.status(500).json({ message: error.message });
   }
+};
+
+// Create unit directly under partner (dedicated endpoint)
+exports.createPartnerUnit = async (req, res) => {
+  try {
+    const { unitName, partnerId } = req.body;
+
+    // Validate required fields
+    if (!unitName || !unitName.trim()) {
+      return res.status(400).json({ message: 'Unit name is required' });
+    }
+    if (!partnerId || !partnerId.trim()) {
+      return res.status(400).json({ message: 'Partner ID is required' });
+    }
+
+    // Check if the partner exists and belongs to the admin
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).json({ message: 'Partner not found' });
+    }
+
+    if (partner.adminId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to create units for this partner' });
+    }
+
+    // Create the unit directly under the partner
+    const unit = await Unit.create({
+      unitName: unitName.trim(),
+      partnerId: partnerId
+    });
+
+    res.status(201).json({
+      message: 'Unit created successfully',
+      unit: await unit.populate('partnerId', 'name email')
+    });
+  } catch (error) {
+    console.error('Error creating partner unit:', error);
+    res.status(500).json({ message: error.message });
+  }
 }; 

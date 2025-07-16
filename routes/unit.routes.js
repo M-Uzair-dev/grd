@@ -6,6 +6,7 @@ const {
   getCustomerUnits,
   getPartnerUnits,
   createUnit,
+  createPartnerUnit,
   updateUnit,
   deleteUnit,
   getUnitById
@@ -22,6 +23,7 @@ router.get('/:id', getUnitById);
 // Admin-only routes
 router.get('/', adminOnly, getAllUnits);
 router.post('/', adminOnly, createUnit);
+router.post('/partner', adminOnly, createPartnerUnit);
 router.put('/:id', adminOnly, updateUnit);
 router.delete('/:id', adminOnly, deleteUnit);
 
