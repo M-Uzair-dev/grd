@@ -508,7 +508,10 @@ const sendReportToCustomer = async (req, res) => {
 // Delete report
 const deleteReport = async (req, res) => {
   try {
-    const reports = await Report.find({ _id: { $in: req.params.ids } })
+    // Handle both single and bulk deletion
+    const reportIds = req.params.ids ? req.params.ids.split(',') : [req.params.id];
+    
+    const reports = await Report.find({ _id: { $in: reportIds } })
       .populate({
         path: 'partnerId',
         select: 'adminId'
@@ -544,7 +547,7 @@ const deleteReport = async (req, res) => {
       }
     });
 
-    await Report.deleteMany({ _id: { $in: req.params.ids } });
+    await Report.deleteMany({ _id: { $in: reportIds } });
 
     res.json({ message: 'Reports deleted successfully' });
   } catch (error) {

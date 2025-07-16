@@ -91,18 +91,22 @@ exports.createUnit = async (req, res) => {
   try {
     const { unitName, customerId, partnerId } = req.body;
 
+    // Clean up the input - treat empty strings as null/undefined
+    const cleanCustomerId = customerId && customerId.trim() !== '' ? customerId : null;
+    const cleanPartnerId = partnerId && partnerId.trim() !== '' ? partnerId : null;
+
     // Validate that either customerId or partnerId is provided, but not both
-    if (!customerId && !partnerId) {
+    if (!cleanCustomerId && !cleanPartnerId) {
       return res.status(400).json({ message: 'Either customerId or partnerId must be provided' });
     }
-    if (customerId && partnerId) {
+    if (cleanCustomerId && cleanPartnerId) {
       return res.status(400).json({ message: 'Unit cannot be associated with both customer and partner' });
     }
 
     let unit;
-    if (customerId) {
+    if (cleanCustomerId) {
       // Check if the customer exists and belongs to a partner managed by the admin
-      const customer = await Customer.findById(customerId)
+      const customer = await Customer.findById(cleanCustomerId)
         .populate('partnerId');
       
       if (!customer) {
@@ -115,7 +119,7 @@ exports.createUnit = async (req, res) => {
 
       unit = await Unit.create({
         unitName,
-        customerId
+        customerId: cleanCustomerId
       });
 
       res.status(201).json({
@@ -124,7 +128,7 @@ exports.createUnit = async (req, res) => {
       });
     } else {
       // Check if the partner exists and belongs to the admin
-      const partner = await Partner.findById(partnerId);
+      const partner = await Partner.findById(cleanPartnerId);
       
       if (!partner) {
         return res.status(404).json({ message: 'Partner not found' });
@@ -136,7 +140,7 @@ exports.createUnit = async (req, res) => {
 
       unit = await Unit.create({
         unitName,
-        partnerId
+        partnerId: cleanPartnerId
       });
 
       res.status(201).json({
@@ -145,6 +149,7 @@ exports.createUnit = async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('Error creating unit:', error);
     res.status(500).json({ message: error.message });
   }
 };
