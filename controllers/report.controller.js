@@ -515,6 +515,14 @@ const deleteReport = async (req, res) => {
       .populate({
         path: 'partnerId',
         select: 'adminId'
+      })
+      .populate({
+        path: 'customerId',
+        populate: { path: 'partnerId', select: 'adminId' }
+      })
+      .populate({
+        path: 'unitId',
+        populate: { path: 'partnerId', select: 'adminId' }
       });
 
     if (reports.length === 0) {
@@ -523,12 +531,20 @@ const deleteReport = async (req, res) => {
 
     // Check if admin owns these reports' partners
     const unauthorizedReports = reports.filter(report => {
-      // Ensure partnerId exists and has adminId
-      if (!report.partnerId || !report.partnerId.adminId) {
+      // Try to get adminId from partnerId, or from customer/unit's partnerId
+      let adminId = null;
+      if (report.partnerId && report.partnerId.adminId) {
+        adminId = report.partnerId.adminId;
+      } else if (report.customerId && report.customerId.partnerId && report.customerId.partnerId.adminId) {
+        adminId = report.customerId.partnerId.adminId;
+      } else if (report.unitId && report.unitId.partnerId && report.unitId.partnerId.adminId) {
+        adminId = report.unitId.partnerId.adminId;
+      }
+      if (!adminId) {
         console.error('Report missing partner or admin data:', report._id);
         return true; // Mark as unauthorized if data is missing
       }
-      return report.partnerId.adminId.toString() !== req.user._id.toString();
+      return adminId.toString() !== req.user._id.toString();
     });
     
     if (unauthorizedReports.length > 0) {
