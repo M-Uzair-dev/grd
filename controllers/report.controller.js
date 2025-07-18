@@ -172,7 +172,16 @@ const createReport = async (req, res) => {
           attachments
         };
 
-        await transporter.sendMail(mailOptions);
+        try {
+          await transporter.sendMail(mailOptions);
+          
+          // Update lastAdminEmailSent timestamp only after successful email
+          report.lastAdminEmailSent = new Date();
+          await report.save();
+        } catch (emailError) {
+          console.error('Failed to send email or update timestamp:', emailError);
+          throw new Error('Failed to send email notification');
+        }
       }
     }
 
@@ -486,15 +495,21 @@ const sendReportToCustomer = async (req, res) => {
       attachmentCount: validAttachments.length
     });
 
-    await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully to customer:', customerEmail);
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log('Email sent successfully to customer:', customerEmail);
 
-    // Mark report as read when sent
-    report.isNew = false;
-    await report.save();
-    console.log('Report marked as read:', report._id);
+      // Mark report as read when sent and update lastPartnerEmailSent timestamp only after successful email
+      report.isNew = false;
+      report.lastPartnerEmailSent = new Date();
+      await report.save();
+      console.log('Report marked as read:', report._id);
 
-    res.json({ message: 'Report sent to customer successfully' });
+      res.json({ message: 'Report sent to customer successfully' });
+    } catch (emailError) {
+      console.error('Failed to send email or update timestamp:', emailError);
+      res.status(500).json({ message: 'Failed to send email to customer' });
+    }
   } catch (error) {
     console.error('Error in sendReportToCustomer:', {
       error: error.message,
@@ -732,9 +747,18 @@ const sendToPartner = async (req, res) => {
       attachments: validAttachments
     };
 
-    await transporter.sendMail(mailOptions);
+    try {
+      await transporter.sendMail(mailOptions);
 
-    res.status(200).json({ message: 'Email sent successfully to partner' });
+      // Update lastAdminEmailSent timestamp only after successful email
+      report.lastAdminEmailSent = new Date();
+      await report.save();
+
+      res.status(200).json({ message: 'Email sent successfully to partner' });
+    } catch (emailError) {
+      console.error('Failed to send email or update timestamp:', emailError);
+      res.status(500).json({ message: 'Failed to send email to partner' });
+    }
   } catch (error) {
     console.error('Error in sendToPartner:', error);
     res.status(500).json({ message: 'Failed to send email to partner' });

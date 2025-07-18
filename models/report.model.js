@@ -44,6 +44,14 @@ const reportSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  lastAdminEmailSent: {
+    type: Date,
+    default: null
+  },
+  lastPartnerEmailSent: {
+    type: Date,
+    default: null
+  },
   partnerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Partner',
