@@ -119,12 +119,6 @@ exports.getPartnerNested = async (req, res) => {
 // Get all partners with nested data (names only) - OPTIMIZED
 exports.getAllPartnersNested = async (req, res) => {
   try {
-    // Check cache first
-    const cacheKey = `partners_nested_${req.user._id}`;
-    const cachedData = getFromCache(cacheKey);
-    if (cachedData) {
-      return res.json(cachedData);
-    }
     const result = await Partner.aggregate([
       // Match partners for this admin
       { $match: { adminId: req.user._id } },
@@ -253,8 +247,6 @@ exports.getAllPartnersNested = async (req, res) => {
       }));
     });
 
-    // Cache the result
-    setCache(cacheKey, result);
     res.json(result);
   } catch (error) {
     console.error('Error fetching nested data:', error);
