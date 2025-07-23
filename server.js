@@ -1,45 +1,51 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const path = require('path');
-require('dotenv').config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const path = require("path");
+require("dotenv").config();
 
 const app = express();
 
-// CORS middleware
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+// Middleware
+app.use(express.json());
+app.use(cors());
 
 // Handle preflight OPTIONS requests for all routes
-app.options('*', cors());
+app.options("*", cors());
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads directory (no caching)
+app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
+  etag: false,
+  maxAge: 0,
+  cacheControl: false
+}));
 
-// Routes that need JSON parsing (no file uploads)
-app.use('/api/auth', express.json({ limit: '10mb' }), require('./routes/auth.routes'));
-app.use('/api/partners', express.json({ limit: '10mb' }), require('./routes/partner.routes'));
-app.use('/api/customers', express.json({ limit: '10mb' }), require('./routes/customer.routes'));
-app.use('/api/units', express.json({ limit: '10mb' }), require('./routes/unit.routes'));
+// Routes
+const authRoutes = require("./routes/auth.routes");
+const partnerRoutes = require("./routes/partner.routes");
+const customerRoutes = require("./routes/customer.routes");
+const unitRoutes = require("./routes/unit.routes");
+const reportRoutes = require("./routes/report.routes");
 
-// Reports route - NO express.json() to allow multer to handle multipart requests
-app.use('/api/reports', require('./routes/report.routes'));
+app.use("/api/auth", authRoutes);
+app.use("/api/partners", partnerRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/units", unitRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  res.status(500).json({ message: "Something went wrong!" });
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-}); 
+});

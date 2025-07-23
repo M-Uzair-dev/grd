@@ -4,11 +4,9 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
-// Create JWT token
+// Create JWT token (no expiration - no caching)
 const createToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: '7d'
-  });
+  return jwt.sign({ id, role }, process.env.JWT_SECRET);
 };
 
 // Configure nodemailer
