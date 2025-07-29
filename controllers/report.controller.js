@@ -853,6 +853,43 @@ const addReportFiles = async (req, res) => {
   }
 };
 
+// Preview report file in browser
+const previewReport = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Check if user has access to this report
+    if (req.user.role === 'partner' && report.partnerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to access this report' });
+    }
+
+    // Find the specific file
+    const file = report.files.id(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const filePath = path.join('.', file.path);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found on server' });
+    }
+
+    // Set content type based on file mime type
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${file.originalName}"`);
+
+    // Stream the file to the response
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Preview error:', error);
+    res.status(500).json({ message: 'Failed to preview file' });
+  }
+};
+
 module.exports = {
   getAllReports,
   getPartnerReports,
@@ -867,6 +904,7 @@ module.exports = {
   downloadReport,
   sendToPartner,
   deleteReportFile,
-  addReportFiles
+  addReportFiles,
+  previewReport
 };
 

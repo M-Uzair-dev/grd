@@ -18,7 +18,8 @@ const {
   markAsRead,
   sendToPartner,
   deleteReportFile,
-  addReportFiles
+  addReportFiles,
+  previewReport
 } = require('../controllers/report.controller');
 
 // Configure multer for disk storage
@@ -68,6 +69,9 @@ router.get('/:id', protect, getReportById);
 
 // Download specific file from report
 router.get('/:id/download/:fileId', protect, downloadReport);
+
+// Preview specific file from report
+router.get('/:id/preview/:fileId', protect, previewReport);
 
 // File management routes
 router.post('/:id/files', adminOnly, upload, addReportFiles); // File upload route with multer middleware
